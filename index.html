@@ -147,6 +147,20 @@ const LIGHTINGS = [
   { id: 'high-contrast', label: '고대비 스포트라이트 (High Contrast Spotlight)', desc: '어두운 배경과 강렬한 주 조명을 대비시켜 입체감과 주도적인 무드를 극대화' }
 ];
 
+const ASPECT_RATIOS = [
+  { id: '9:16', label: '9:16 (틱톡/쇼츠/릴스 세로형)' },
+  { id: '16:9', label: '16:9 (유튜브/시네마틱 가로형)' },
+  { id: '3:4', label: '3:4 (표준 상업 포트레이트)' },
+  { id: '4:3', label: '4:3 (클래식 잡지 가로형)' },
+  { id: '1:1', label: '1:1 (인스타그램 피드 정방형)' }
+];
+
+const RESOLUTIONS = [
+  { id: '1k', label: '일반 HD (1K)', desc: '기본 웹 배너 및 SNS 확인용' },
+  { id: '2k', label: '고해상도 QHD (2K)', desc: '포트폴리오 및 고품질 인쇄용' },
+  { id: '4k', label: '초고해상도 Ultra-HD (4K)', desc: '상업 옥외 광고 및 최고화질 스크린용' }
+];
+
 function App() {
   const [apiKey, setApiKey] = useState('');
   
@@ -158,17 +172,26 @@ function App() {
   const [customProductImage, setCustomProductImage] = useState(null);
   const [customModelImage, setCustomModelImage] = useState(null);
 
+  // AI Product Extraction Tool states
+  const [extractorSrcImage, setExtractorSrcImage] = useState(null);
+  const [extractionPrompt, setExtractionPrompt] = useState('네온 레드 운동화 (neon red athletic runners)');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionStep, setExtractionStep] = useState('');
+  const [productInputMode, setProductInputMode] = useState('preset'); // 'preset' or 'extractor'
+
   // Layout Composer State
   const [prodPos, setProdPos] = useState({ x: 50, y: 50, scale: 0.6, rotation: 0, opacity: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  // Camera, Pose, Background selections
+  // Camera, Pose, Background, Ratio, Resolution selections
   const [cameraAngle, setCameraAngle] = useState(CAMERA_ANGLES[0].id);
   const [pose, setPose] = useState(POSES[1].id);
   const [showingRange, setShowingRange] = useState(SHOWING_RANGES[2].id);
   const [background, setBackground] = useState(BACKGROUNDS[3].id);
   const [lighting, setLighting] = useState(LIGHTINGS[2].id);
+  const [aspectRatio, setAspectRatio] = useState('3:4');
+  const [resolution, setResolution] = useState('2k');
   const [customPrompt, setCustomPrompt] = useState('');
 
   // AI Generation States
@@ -185,11 +208,34 @@ function App() {
   const [visualCritique, setVisualCritique] = useState(null);
   const [selectedModalTab, setSelectedModalTab] = useState('image'); // 'image', 'copywriting', 'critic'
 
+  // Custom notification & confirmation systems
+  const [toasts, setToasts] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
+
   // UI Tabs & Views
   const [activeTab, setActiveTab] = useState('composer'); // 'composer', 'history', 'docs'
   const [showGuide, setShowGuide] = useState(true);
   
   const composerContainerRef = useRef(null);
+
+  const showToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  const triggerConfirm = (message, action) => {
+    setConfirmModal({
+      show: true,
+      message,
+      onConfirm: () => {
+        action();
+        setConfirmModal({ show: false, message: '', onConfirm: null });
+      }
+    });
+  };
 
   // Get image source helpers
   const getProductImageSrc = () => customProductImage || selectedProduct.url;
@@ -248,13 +294,13 @@ function App() {
     }));
   };
 
-  // Helper to trigger custom uploads
   const handleProductUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (uploadEvent) => {
         setCustomProductImage(uploadEvent.target.result);
+        showToast("커스텀 상품 이미지가 등록되었습니다.", "success");
       };
       reader.readAsDataURL(file);
     }
@@ -266,14 +312,139 @@ function App() {
       const reader = new FileReader();
       reader.onload = (uploadEvent) => {
         setCustomModelImage(uploadEvent.target.result);
+        showToast("커스텀 모델 이미지가 등록되었습니다.", "success");
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Function to capture and combine canvas layers
+  const handleExtractorUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        setExtractorSrcImage(uploadEvent.target.result);
+        showToast("상품 분석 소스 이미지가 업로드되었습니다.", "info");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeGreenBackground = (imageSrc) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Chroma Key logic targeting solid vibrant green hues (#00FF00)
+          const isGreen = (g > 110 && g > r * 1.25 && g > b * 1.25) || (g > 175 && r < 100 && b < 100);
+          if (isGreen) {
+            data[i + 3] = 0; // Set Alpha to 0 (completely transparent)
+          }
+        }
+        
+        ctx.putImageData(imgData, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = imageSrc;
+    });
+  };
+
+  const handleProductExtraction = async () => {
+    if (!extractorSrcImage) {
+      showToast("먼저 상품이 포함된 소스 이미지를 업로드해주세요.", "warning");
+      return;
+    }
+    if (!extractionPrompt.trim()) {
+      showToast("추출할 상품명 및 상세 묘사(프롬프트)를 적어주세요.", "warning");
+      return;
+    }
+    
+    setIsExtracting(true);
+    setExtractionStep('이미지 데이터 업로드 분석 중...');
+    
+    try {
+      const cleanSourceBase64 = extractorSrcImage.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+      
+      setExtractionStep('Gemini 3.1 Flash Image 크로마키 격리 연산 중...');
+      
+      const isolatePrompt = `Extract and isolate only the specified product: "${extractionPrompt}".
+Place this item exactly as it is, but on a solid, uniform, vibrant neon green background (hex color #00FF00).
+All other elements, including people, hands, holding gestures, original background, clothing, and other objects must be completely erased and replaced with the solid vibrant neon green (#00FF00) background. Do not add cast-shadows outside the object. Keep only the requested item completely intact with its high-detail natural texture.`;
+
+      const payload = {
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: isolatePrompt },
+            {
+              inlineData: {
+                mimeType: "image/png",
+                data: cleanSourceBase64
+              }
+            }
+          ]
+        }],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+          imageConfig: {
+            aspectRatio: "1:1" // Perfect square ratio for stickers
+          }
+        }
+      };
+
+      const finalApiKey = apiKey || ""; 
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${finalApiKey}`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`격리 API 오류: ${errText}`);
+      }
+
+      const result = await response.json();
+      const imagePart = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      
+      if (!imagePart || !imagePart.inlineData?.data) {
+        throw new Error("결과 상품 격리 이미지를 받아오지 못했습니다.");
+      }
+
+      setExtractionStep('그린 스크린 투명도(크로마키 Alpha) 필터 처리 중...');
+      const greenScreenUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+      
+      const transparentPngUrl = await removeGreenBackground(greenScreenUrl);
+      
+      setCustomProductImage(transparentPngUrl);
+      setExtractionStep('추출 완료!');
+      showToast("상품 투명 추출이 성공적으로 완료되었습니다!", "success");
+    } catch (error) {
+      console.error(error);
+      showToast(`상품 추출 중 오류가 발생했습니다: ${error.message}`, "error");
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   const generateCompositeBase64 = async () => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
@@ -361,7 +532,8 @@ function App() {
     4. 연출 포즈 및 분위기: ${selectedPoseObj}
     5. 촬영 배경 공간: ${selectedBgObj}
     6. 조명 테크닉: ${selectedLightingObj}
-    7. 사용자가 원한 추가 상세묘사: ${customPrompt || "매끄러운 장착 상태"}`;
+    7. 화면 해상도 요건: ${resolution === '4k' ? 'Ultra HD 4K Quality' : resolution === '2k' ? 'High-Res 2K' : 'Standard 1K'}
+    8. 사용자가 원한 추가 상세묘사: ${customPrompt || "매끄러운 장착 상태"}`;
 
     try {
       const payload = {
@@ -382,10 +554,11 @@ function App() {
       
       if (generatedText) {
         setCustomPrompt(generatedText.trim());
+        showToast("AI가 연출 프롬프트를 시네마틱 급으로 정밀화했습니다!", "success");
       }
     } catch (e) {
       console.error(e);
-      alert("AI 프롬프트 최적화 중 오류가 발생했습니다. 직접 묘사란을 채우시거나 키를 확인해주세요.");
+      showToast("AI 프롬프트 최적화 중 오류가 발생했습니다.", "error");
     } finally {
       setIsEnhancingPrompt(false);
     }
@@ -437,10 +610,11 @@ function App() {
       
       if (jsonText) {
         setMarketingCopy(JSON.parse(jsonText));
+        showToast("마케팅 카피가 완성되었습니다!", "success");
       }
     } catch (e) {
       console.error(e);
-      alert("마케팅 카피라이팅 생성 도중 요류가 발생했습니다.");
+      showToast("마케팅 카피라이팅 생성 도중 요류가 발생했습니다.", "error");
     } finally {
       setIsGeneratingMarketing(false);
     }
@@ -451,7 +625,6 @@ function App() {
     setIsAnalyzingScene(true);
 
     try {
-      // Clean generated base64 from current state
       const cleanBase64 = generatedImageUrl.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
 
       const systemPrompt = "너는 에디토리얼 패션 사진 비평가이자 AI 이미지 피팅 기술 연구원이야. 완성된 AI 광고 화보 이미지를 꼼꼼히 확인하고, 다음 4가지 세밀한 관점에서 한글 피드백을 전달해줘: 1. 모델과 장착된 상품의 기하학적 형태 합치도 및 어색함, 2. 광원/조명 일치성, 3. 그림자 유무와 자연스러움, 4. 100점 만점 기준의 비주얼 피트 종합 점수(예: 92점). 반드시 한국어로 우호적이면서도 냉정한 조언을 아끼지 않는 패션 전문가 어조로 작성해줘.";
@@ -487,10 +660,11 @@ function App() {
 
       if (reviewText) {
         setVisualCritique(reviewText);
+        showToast("AI 에디터 비평 및 평론이 업데이트되었습니다!", "success");
       }
     } catch (e) {
       console.error(e);
-      alert("비주얼 피드백 분석 중 문제가 발생했습니다.");
+      showToast("비주얼 피드백 분석 중 문제가 발생했습니다.", "error");
     } finally {
       setIsAnalyzingScene(false);
     }
@@ -500,7 +674,6 @@ function App() {
     setIsGenerating(true);
     setGenerationStep('가상 배치도 합성 가이드 제작 중...');
     
-    // Clear previous analysis when running a new shoot
     setMarketingCopy(null);
     setVisualCritique(null);
     setSelectedModalTab('image');
@@ -514,6 +687,7 @@ function App() {
       const selectedRangeObj = SHOWING_RANGES.find(r => r.id === showingRange);
       const selectedBgObj = BACKGROUNDS.find(b => b.id === background);
       const selectedLightingObj = LIGHTINGS.find(l => l.id === lighting);
+      const selectedResObj = RESOLUTIONS.find(r => r.id === resolution);
       
       const finalPrompt = `Create a high-end commercial advertising photoshoot based on the layout reference image provided.
 The product shown positioned on the model must be seamlessly and flawlessly integrated into the scene.
@@ -526,8 +700,9 @@ Shoot Specifications:
 - Show Range/Framing: ${selectedRangeObj.label}. ${selectedRangeObj.desc}
 - Background Location: ${selectedBgObj.label}. ${selectedBgObj.desc}
 - Lighting Style: ${selectedLightingObj.label}. ${selectedLightingObj.desc}
+- Requested Resolution: ${selectedResObj.label} (${selectedResObj.desc})
 
-Technical Style: Professional high-fashion advertising campaign grade, realistic textures, detailed leather/metals/fabrics, elegant rim highlights, 8k resolution, cinematic atmosphere, crisp focus on the product, natural fitment. Avoid extra duplicate floating products. Only generate one stunning final image.`;
+Technical Style: Professional high-fashion advertising campaign grade, realistic textures, detailed leather/metals/fabrics, elegant rim highlights, ${resolution === '4k' ? 'extremely ultra-detailed 4k resolution sharpness' : 'crisp high-definition details'}, cinematic atmosphere, crisp focus on the product, natural fitment. Avoid extra duplicate floating products. Only generate one stunning final image.`;
 
       setGenerationStep('Gemini 3.1 Flash Image 연결 및 촬영 렌더링 중 (약 10-15초)...');
       
@@ -547,7 +722,7 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
         generationConfig: {
           responseModalities: ['IMAGE'],
           imageConfig: {
-            aspectRatio: "3:4"
+            aspectRatio: aspectRatio
           }
         }
       };
@@ -585,16 +760,19 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
           angle: selectedAngleObj.label,
           pose: selectedPoseObj.label,
           background: selectedBgObj.label,
-          lighting: selectedLightingObj.label
+          lighting: selectedLightingObj.label,
+          ratio: aspectRatio,
+          resolution: selectedResObj.label
         },
         url: renderedUrl
       };
       setGenerationHistory(prev => [newHistoryItem, ...prev]);
       setGenerationStep('완성되었습니다!');
+      showToast("새로운 브랜드 광고 화보가 성황리에 촬영되었습니다!", "success");
       
     } catch (error) {
       console.error(error);
-      alert(`AI 화보 촬영 중 오류 발생: ${error.message}\nAPI 키가 정확하게 등록되어 있고 유효한지 확인해주세요.`);
+      showToast(`AI 화보 촬영 중 오류 발생: ${error.message}`, "error");
     } finally {
       setIsGenerating(false);
     }
@@ -620,6 +798,8 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
       setShowingRange('full-body');
       setBackground('cyberpunk-neon');
       setLighting('rim-cinematic');
+      setAspectRatio('3:4');
+      setResolution('2k');
       setCustomPrompt('Urban streetwear footwear concept, neon cyber glow casting blue and red light reflections, wet puddle reflections under dynamic stride.');
     } else if (productId === 'prod-watch') {
       setProdPos({ x: 180, y: 230, scale: 0.35, rotation: -15, opacity: 1 });
@@ -628,6 +808,8 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
       setShowingRange('detail-close');
       setBackground('cozy-scandinavian');
       setLighting('golden-hour');
+      setAspectRatio('1:1');
+      setResolution('2k');
       setCustomPrompt('Warm golden hour atmosphere of Scandinavian cafe, detailed leather and polished metallic watch bezel, soft focusing.');
     } else if (productId === 'prod-glasses') {
       setProdPos({ x: 200, y: 130, scale: 0.38, rotation: 5, opacity: 1 });
@@ -636,6 +818,8 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
       setShowingRange('bust-shot');
       setBackground('minimal-studio');
       setLighting('soft-diffused');
+      setAspectRatio('3:4');
+      setResolution('2k');
       setCustomPrompt('Modern elegant acetate frames fitted beautifully, flawless high fashion beauty modeling lighting.');
     } else if (productId === 'prod-bag') {
       setProdPos({ x: 170, y: 340, scale: 0.6, rotation: -8, opacity: 1 });
@@ -644,8 +828,11 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
       setShowingRange('waist-up');
       setBackground('luxury-lounge');
       setLighting('high-contrast');
+      setAspectRatio('16:9');
+      setResolution('4k');
       setCustomPrompt('Luxury aesthetic, textured designer handbag carried elegance, dramatic contrast studio spotlight.');
     }
+    showToast("프리셋 매칭 및 디렉션 구도가 성공적으로 업데이트되었습니다.", "info");
   };
 
   const copyToClipboard = (text) => {
@@ -655,7 +842,23 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
     dummy.select();
     document.execCommand("copy");
     document.body.removeChild(dummy);
-    alert("클립보드에 카피되었습니다!");
+    showToast("클립보드에 복사 완료!", "success");
+  };
+
+  const handleCopyMarkdown = () => {
+    if (!visualCritique) return;
+    const mdText = `### AI 비주얼 핏 진단 & 브랜드 평론 리포트\n\n${visualCritique}`;
+    copyToClipboard(mdText);
+  };
+
+  const handleCopyFormattedText = () => {
+    if (!visualCritique) return;
+    // Strip markdown elements for a clean rendered style plain-text report
+    const formatted = visualCritique
+      .replace(/[#*`_-]/g, '')
+      .replace(/\n\s*\n/g, '\n\n')
+      .trim();
+    copyToClipboard(formatted);
   };
 
   useEffect(() => {
@@ -663,7 +866,53 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative overflow-hidden">
+      
+      {/* Toast Notification Container */}
+      <div className="fixed top-5 right-5 z-50 space-y-2 max-w-sm pointer-events-none">
+        {toasts.map(t => (
+          <div 
+            key={t.id} 
+            className={`p-4 rounded-xl shadow-2xl flex items-center space-x-3 text-xs font-semibold border transition-all animate-bounce pointer-events-auto ${
+              t.type === 'success' ? 'bg-emerald-950/95 text-emerald-300 border-emerald-500/30' :
+              t.type === 'error' ? 'bg-rose-950/95 text-rose-300 border-rose-500/30' :
+              t.type === 'warning' ? 'bg-amber-950/95 text-amber-300 border-amber-500/30' :
+              'bg-slate-900/95 text-slate-200 border-slate-700/50'
+            }`}>
+            <span>
+              {t.type === 'success' && <i className="fa-solid fa-circle-check text-emerald-400"></i>}
+              {t.type === 'error' && <i className="fa-solid fa-circle-exclamation text-rose-400"></i>}
+              {t.type === 'warning' && <i className="fa-solid fa-triangle-exclamation text-amber-400"></i>}
+              {t.type === 'info' && <i className="fa-solid fa-circle-info text-blue-400"></i>}
+            </span>
+            <p className="flex-1">{t.message}</p>
+          </div>
+        ))}
+      </div>
+
+      {confirmModal.show && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-slate-200 text-sm flex items-center">
+              <i className="fa-solid fa-triangle-exclamation text-amber-400 mr-2 text-base"></i> 확인 필요
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">{confirmModal.message}</p>
+            <div className="flex justify-end space-x-2 pt-2">
+              <button 
+                onClick={() => setConfirmModal({ show: false, message: '', onConfirm: null })}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-xs font-semibold">
+                취소
+              </button>
+              <button 
+                onClick={confirmModal.onConfirm}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-semibold">
+                진행
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- Top Navigation Header --- */}
       <header className="bg-[#0f172a] border-b border-slate-800 px-6 py-4 sticky top-0 z-40 flex flex-wrap justify-between items-center">
         <div className="flex items-center space-x-3">
@@ -681,7 +930,6 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
           </div>
         </div>
 
-        {}
         <div className="flex items-center space-x-4 mt-3 sm:mt-0">
           <div className="flex space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button 
@@ -721,11 +969,10 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
         </div>
       </header>
 
-      {/* --- Main Workspace Content --- */}
       {activeTab === 'composer' && (
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
           
-          {}
+          {/* Left panel: Presets and uploads */}
           <aside className="lg:col-span-4 border-r border-slate-800 bg-[#0c1220] overflow-y-auto p-5 space-y-5">
             
             {/* Quick Match Presets */}
@@ -786,7 +1033,12 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
                       <div className="text-[10px] text-emerald-400">활성화 상태</div>
                     </div>
                   </div>
-                  <button onClick={() => setCustomModelImage(null)} className="text-slate-500 hover:text-red-400 text-xs px-2 py-1">
+                  <button onClick={() => {
+                    triggerConfirm("커스텀 모델을 제거하고 프리셋으로 복원하시겠습니까?", () => {
+                      setCustomModelImage(null);
+                      showToast("커스텀 모델이 해제되었습니다.", "info");
+                    });
+                  }} className="text-slate-500 hover:text-red-400 text-xs px-2 py-1">
                     취소
                   </button>
                 </div>
@@ -809,50 +1061,143 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
             </div>
 
             {/* Product Setup */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-slate-200 flex items-center">
                   <span className="bg-indigo-600/20 text-indigo-400 px-2 py-0.5 rounded mr-2 text-[10px]">2</span> 
                   상품(Product) 피팅 이미지 설정
                 </h3>
-                <label className="text-xs text-indigo-400 font-semibold cursor-pointer hover:text-indigo-300">
-                  <i className="fa-solid fa-cloud-arrow-up mr-1"></i>상품 등록
-                  <input type="file" accept="image/*" onChange={handleProductUpload} className="hidden" />
-                </label>
               </div>
 
-              {customProductImage ? (
-                <div className="bg-slate-900 p-3 rounded-lg border border-indigo-500/50 flex justify-between items-center">
-                  <div className="flex items-center space-x-3">
-                    <img src={customProductImage} className="w-10 h-10 object-cover rounded" />
-                    <div>
-                      <div className="text-xs font-bold text-slate-200">사용자 업로드 상품</div>
-                      <div className="text-[10px] text-emerald-400">활성화 상태</div>
-                    </div>
+              {/* Mode Select Tabs for Product Input */}
+              <div className="flex bg-slate-900/85 p-1 rounded-lg border border-slate-800/80 space-x-1">
+                <button 
+                  onClick={() => setProductInputMode('preset')}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded transition ${productInputMode === 'preset' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                  <i className="fa-solid fa-images mr-1"></i> 기본 등록 / 프리셋
+                </button>
+                <button 
+                  onClick={() => setProductInputMode('extractor')}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded transition ${productInputMode === 'extractor' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                  <i className="fa-solid fa-scissors mr-1 text-yellow-400 animate-pulse"></i> AI 상품 추출기
+                </button>
+              </div>
+
+              {productInputMode === 'preset' ? (
+                <>
+                  <div className="flex justify-between items-center text-[10px] text-slate-400">
+                    <span>원클릭 프리셋 라이브러리</span>
+                    <label className="text-xs text-indigo-400 font-semibold cursor-pointer hover:text-indigo-300">
+                      <i className="fa-solid fa-cloud-arrow-up mr-1"></i>상품 직접 등록
+                      <input type="file" accept="image/*" onChange={handleProductUpload} className="hidden" />
+                    </label>
                   </div>
-                  <button onClick={() => setCustomProductImage(null)} className="text-slate-500 hover:text-red-400 text-xs px-2 py-1">
-                    취소
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {PRESET_PRODUCTS.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedProduct(p)}
-                      className={`relative group overflow-hidden rounded-xl border text-left transition-all ${selectedProduct.id === p.id ? 'border-indigo-500 ring-2 ring-indigo-500/30' : 'border-slate-800 hover:border-slate-700'}`}>
-                      <img src={p.url} className="w-full h-20 object-cover brightness-75 group-hover:brightness-90 transition" />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent p-1.5">
-                        <p className="text-[10px] font-bold truncate text-white">{p.name}</p>
-                        <p className="text-[9px] text-slate-400">{p.category}</p>
+
+                  {customProductImage ? (
+                    <div className="bg-slate-900 p-3 rounded-lg border border-indigo-500/50 flex justify-between items-center">
+                      <div className="flex items-center space-x-3">
+                        <img src={customProductImage} className="w-10 h-10 object-contain rounded bg-slate-950" />
+                        <div>
+                          <div className="text-xs font-bold text-slate-200">사용자 직접 업로드 상품</div>
+                          <div className="text-[10px] text-emerald-400">피팅 레이어 적용됨</div>
+                        </div>
                       </div>
-                    </button>
-                  ))}
+                      <button onClick={() => {
+                        triggerConfirm("상품 이미지를 원래 프리셋으로 복구하시겠습니까?", () => {
+                          setCustomProductImage(null);
+                          showToast("커스텀 상품이 제거되었습니다.", "info");
+                        });
+                      }} className="text-slate-500 hover:text-red-400 text-xs px-2 py-1">
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {PRESET_PRODUCTS.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedProduct(p)}
+                          className={`relative group overflow-hidden rounded-xl border text-left transition-all ${selectedProduct.id === p.id ? 'border-indigo-500 ring-2 ring-indigo-500/30' : 'border-slate-800 hover:border-slate-700'}`}>
+                          <img src={p.url} className="w-full h-20 object-cover brightness-75 group-hover:brightness-90 transition" />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent p-1.5">
+                            <p className="text-[10px] font-bold truncate text-white">{p.name}</p>
+                            <p className="text-[9px] text-slate-400">{p.category}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* AI Product Extraction UI Tab Block */
+                <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-850 space-y-3">
+                  <div className="text-[11px] font-semibold text-slate-300 flex items-center">
+                    <i className="fa-solid fa-scissors text-indigo-400 mr-1.5"></i>
+                    사진 속 특정 상품만 스마트 투명 추출
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-2.5">
+                    <div className="relative border border-dashed border-slate-700 hover:border-indigo-500/50 rounded-lg p-3.5 text-center transition bg-slate-950/40 cursor-pointer">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleExtractorUpload} 
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                      />
+                      {extractorSrcImage ? (
+                        <div className="flex flex-col items-center space-y-1">
+                          <img src={extractorSrcImage} className="max-h-24 object-contain rounded shadow" />
+                          <span className="text-[9px] text-indigo-400 font-semibold">이미지 교체하려면 클릭</span>
+                        </div>
+                      ) : (
+                        <div className="py-2">
+                          <i className="fa-solid fa-shirt text-slate-500 text-xl mb-1.5 block"></i>
+                          <span className="text-[10px] text-slate-300 block font-semibold">상품이 포함된 소스 사진 등록</span>
+                          <span className="text-[9px] text-slate-500 block mt-0.5">(예: 모델 착용 화보, 촬영 스냅 등)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 block">추출하고자 하는 상품 명칭 & 상세 묘사</label>
+                      <input 
+                        type="text" 
+                        value={extractionPrompt}
+                        onChange={(e) => setExtractionPrompt(e.target.value)}
+                        placeholder="예: 들고 있는 블랙 숄더백, 모델이 입은 가죽 재킷"
+                        className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    {isExtracting ? (
+                      <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 flex items-center space-x-2 text-[10px] text-slate-300">
+                        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="leading-tight font-medium">{extractionStep}</span>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={handleProductExtraction}
+                        className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-2.5 rounded-lg text-[10px] transition flex items-center justify-center space-x-1.5 shadow">
+                        <i className="fa-solid fa-scissors"></i>
+                        <span>AI 상품 투명 격리 추출 및 피팅 적용</span>
+                      </button>
+                    )}
+
+                    {customProductImage && (
+                      <div className="bg-emerald-950/20 border border-emerald-500/25 p-2 rounded text-[10px] text-emerald-400 flex items-center justify-between">
+                        <span>✨ 추출 완료된 투명 상품 피팅 적용 상태</span>
+                        <button 
+                          onClick={() => setCustomProductImage(null)} 
+                          className="text-slate-400 hover:text-red-400 text-xs font-bold px-1">
+                          취소
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Visual Composer Controllers */}
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
               <span className="text-xs font-bold text-slate-300 flex items-center justify-between">
                 <span className="flex items-center"><i className="fa-solid fa-sliders text-indigo-500 mr-2"></i>화보 피팅 조절도구</span>
@@ -911,7 +1256,7 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
 
           </aside>
 
-          {}
+          {/* Center Main panel: Interactive canvas frame */}
           <main className="lg:col-span-5 bg-slate-950 p-5 flex flex-col justify-between border-r border-slate-800 overflow-y-auto">
             
             {showGuide && (
@@ -991,7 +1336,7 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
               </button>
             </div>
 
-            {}
+            {/* Prompt Helper Section */}
             <div className="mt-4 pt-3 border-t border-slate-800 space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold text-slate-300 flex items-center">
@@ -1027,7 +1372,7 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
 
           </main>
 
-          {}
+          {/* Right panel: Camera parameters, Aspect Ratios, Resolutions & Directing Prompts */}
           <aside className="lg:col-span-3 bg-[#0c1220] p-5 flex flex-col justify-between overflow-y-auto">
             
             <div className="space-y-4">
@@ -1035,6 +1380,51 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
                   <i className="fa-solid fa-video text-indigo-500 mr-2"></i>카메라 촬영 및 환경 연출
                 </h4>
+              </div>
+
+              {/* Aspect Ratio Selector */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-300 block">이미지 화면 비율 (Aspect Ratio)</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {ASPECT_RATIOS.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        setAspectRatio(r.id);
+                        showToast(`비율을 ${r.id}로 조정했습니다.`, "info");
+                      }}
+                      className={`text-[10px] py-1.5 px-2 rounded-lg border font-medium text-left transition ${aspectRatio === r.id ? 'bg-indigo-600/30 border-indigo-500 text-white font-bold' : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700'}`}>
+                      {r.id === '3:4' && <i className="fa-solid fa-image-portrait mr-1"></i>}
+                      {r.id === '16:9' && <i className="fa-solid fa-file-video mr-1"></i>}
+                      {r.id === '1:1' && <i className="fa-solid fa-square mr-1"></i>}
+                      {r.id === '9:16' && <i className="fa-solid fa-mobile-screen mr-1"></i>}
+                      {r.id === '4:3' && <i className="fa-solid fa-desktop mr-1"></i>}
+                      {r.id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resolution Setup Selector */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-300 block">출력 렌더링 해상도 (Output Quality)</label>
+                <div className="space-y-1">
+                  {RESOLUTIONS.map(resOption => (
+                    <button
+                      key={resOption.id}
+                      onClick={() => {
+                        setResolution(resOption.id);
+                        showToast(`해상도를 ${resOption.label}로 지정했습니다.`, "info");
+                      }}
+                      className={`w-full flex justify-between items-center text-left p-2 rounded-lg border text-[10px] transition ${resolution === resOption.id ? 'bg-indigo-600/30 border-indigo-500 text-white font-bold' : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700'}`}>
+                      <div>
+                        <div className="font-semibold text-slate-200">{resOption.label}</div>
+                        <div className="text-[8px] text-slate-500 mt-0.5">{resOption.desc}</div>
+                      </div>
+                      {resolution === resOption.id && <i className="fa-solid fa-circle-check text-indigo-400 text-xs"></i>}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Angle selection */}
@@ -1144,7 +1534,12 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
             </div>
             {generationHistory.length > 0 && (
               <button 
-                onClick={() => { if(confirm('모든 히스토리를 삭제하시겠습니까?')) setGenerationHistory([]) }}
+                onClick={() => {
+                  triggerConfirm("모든 생성 화보 히스토리를 비우시겠습니까?", () => {
+                    setGenerationHistory([]);
+                    showToast("히스토리가 초기화되었습니다.", "info");
+                  });
+                }}
                 className="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-400 border border-red-900/30 px-3 py-1.5 rounded-lg transition">
                 전체 삭제
               </button>
@@ -1186,7 +1581,8 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
                       <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-400">
                         <div className="bg-slate-950 p-1.5 rounded">📐 {item.parameters.angle}</div>
                         <div className="bg-slate-950 p-1.5 rounded">🧍 {item.parameters.pose}</div>
-                        <div className="bg-slate-950 p-1.5 rounded-b col-span-2">📍 {item.parameters.background}</div>
+                        <div className="bg-slate-950 p-1.5 rounded col-span-2">📍 {item.parameters.background}</div>
+                        <div className="bg-slate-950/70 p-1.5 rounded text-[9px] col-span-2 text-indigo-400 font-bold">🖥️ {item.parameters.ratio} | {item.parameters.resolution}</div>
                       </div>
                     </div>
                   </div>
@@ -1238,15 +1634,15 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
         </div>
       )}
 
-      {}
+      {/* --- Output View Modal with Critique & Ad Copywriter --- */}
       {generatedImageUrl && activeTab === 'composer' && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-4 overflow-y-auto animate-fade-in">
           <div className="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
             
             {/* Modal Header */}
             <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
               <div className="flex items-center space-x-2">
-                <span className="bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded text-xs font-bold border border-emerald-500/30">
+                <span className="bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded text-xs font-bold border border-emerald-500/30 animate-pulse">
                   ✨ AI 촬영 완료
                 </span>
                 <h3 className="font-bold text-slate-200">AdLens 가상 광고 화보 & 지능형 크리에이티브 분석</h3>
@@ -1374,22 +1770,41 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
 
                 {/* TAB 3: Visual Critic */}
                 {selectedModalTab === 'critic' && (
-                  <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 h-[350px] overflow-y-auto">
-                    {isAnalyzingScene ? (
-                      <div className="flex flex-col items-center justify-center h-full space-y-3">
-                        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                        <p className="text-xs text-slate-400">Gemini 멀티모달 기술자가 피팅 및 그림자 정합성을 감정 중...</p>
-                      </div>
-                    ) : visualCritique ? (
-                      <div className="space-y-4">
-                        <div className="border-l-4 border-emerald-500 pl-3">
-                          <h4 className="text-xs font-bold text-slate-400">AI 비평가 종합 감정 및 컨설팅 리포트</h4>
+                  <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 h-[350px] overflow-y-auto flex flex-col justify-between">
+                    <div className="space-y-4 flex-1">
+                      {isAnalyzingScene ? (
+                        <div className="flex flex-col items-center justify-center h-full space-y-3 pt-12">
+                          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                          <p className="text-xs text-slate-400">Gemini 멀티모달 기술자가 피팅 및 그림자 정합성을 감정 중...</p>
                         </div>
-                        <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{visualCritique}</p>
-                      </div>
-                    ) : (
-                      <div className="text-center py-12 text-slate-500">
-                        피드백 데이터가 없습니다.
+                      ) : visualCritique ? (
+                        <div className="space-y-4">
+                          <div className="border-l-4 border-emerald-500 pl-3 flex justify-between items-center">
+                            <h4 className="text-xs font-bold text-slate-400">AI 비평가 종합 감정 및 컨설팅 리포트</h4>
+                          </div>
+                          <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{visualCritique}</p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-slate-500">
+                          피드백 데이터가 없습니다.
+                        </div>
+                      )}
+                    </div>
+
+                    {visualCritique && !isAnalyzingScene && (
+                      <div className="mt-4 pt-4 border-t border-slate-800 flex space-x-2 justify-end">
+                        <button
+                          onClick={handleCopyMarkdown}
+                          className="bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5">
+                          <i className="fa-solid fa-code"></i>
+                          <span>마크다운 형식 복사</span>
+                        </button>
+                        <button
+                          onClick={handleCopyFormattedText}
+                          className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5">
+                          <i className="fa-solid fa-align-left"></i>
+                          <span>일반 텍스트 서식 복사</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1427,6 +1842,12 @@ Technical Style: Professional high-fashion advertising campaign grade, realistic
                         <span className="text-[10px] text-slate-500 block mb-0.5">선택 조명</span>
                         <span className="font-semibold text-slate-200 block">
                           {LIGHTINGS.find(l => l.id === lighting)?.label}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900/50 p-2.5 rounded border border-slate-800 col-span-2">
+                        <span className="text-[10px] text-slate-500 block mb-0.5">출력 규격 및 화질 비율</span>
+                        <span className="font-bold text-indigo-400 block">
+                          {aspectRatio} Ratio | {RESOLUTIONS.find(r => r.id === resolution)?.label}
                         </span>
                       </div>
                     </div>
