@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Commercial Photoshoot Studio</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter & Noto Sans KR -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons for stunning buttons/UI elements -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<!-- React & Babel CDNs -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// --- Preset Data for seamless initial experience ---
+const PRESET_PRODUCTS = [
+  {
+    id: 'prod-sneakers',
+    name: '스포티 네온 러너',
+    category: '신발',
+    url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&q=80',
+    description: '트렌디한 레드 컬러와 가벼운 에어 매쉬 재질의 스포츠 러닝화'
+  },
+  {
+    id: 'prod-watch',
+    name: '미니멀 클래식 스마트워치',
+    category: '액세서리',
+    url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80',
+    description: '가죽 스트랩과 깔끔한 메탈 베젤의 럭셔리 스마트워치'
+  },
+  {
+    id: 'prod-glasses',
+    name: '골드 빈티지 아세테이트 안경',
+    category: '안경/선글라스',
+    url: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&q=80',
+    description: '클래식한 골드 메탈 라인과 볼드한 아세테이트 하프 선글라스'
+  },
+  {
+    id: 'prod-bag',
+    name: '파리지앵 레더 토트백',
+    category: '가방',
+    url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=400&q=80',
+    description: '고급스러운 가죽 표면 질감이 돋보이는 모던 미니멀 토트백'
+  }
+];
+
+const PRESET_MODELS = [
+  {
+    id: 'model-male-sporty',
+    name: '남성 애슬레틱 스포츠 모델',
+    category: '스포티/역동',
+    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&q=80',
+    description: '활동적이고 건강한 야외 자연광 무드의 남성 모델'
+  },
+  {
+    id: 'model-female-fashion',
+    name: '여성 엘레강스 패션 모델',
+    category: '뷰티/클래식',
+    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&q=80',
+    description: '클래식한 표정 연출과 섬세한 조명이 적용된 클로즈업/바스트 샷 여성 모델'
+  },
+  {
+    id: 'model-body-hands',
+    name: '라이프스타일 클로즈업 핸즈',
+    category: '핸드/착용샷용',
+    url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&q=80',
+    description: '자연스럽게 제품을 매칭할 수 있는 뉴트럴 톤의 손과 바디 앵글'
+  },
+  {
+    id: 'model-fullbody-studio',
+    name: '미니멀 런웨이 전신 모델',
+    category: '전신/코디',
+    url: 'https://images.unsplash.com/photo-1617137968427-85924c800a22?w=600&q=80',
+    description: '럭셔리 슈트 무드의 스튜디오 실루엣 전신 남성 모델'
+  }
+];
+
+const CAMERA_ANGLES = [
+  { id: 'eye-level', label: '정면 아이레벨 (Eye Level)', desc: '인간의 시선과 동일한 높이로 정직하고 균형감 있는 안정적 구도' },
+  { id: 'low-angle', label: '하이파워 로우 앵글 (Low Angle)', desc: '아래에서 위로 올려다보는 강렬하고 웅장한 히어로 구도' },
+  { id: 'high-angle', label: '감각적 하이 앵글 (High Angle)', desc: '위에서 굽어보는 부드럽고 전경적인 스튜디오 패션 구도' },
+  { id: 'macro-close', label: '익스트림 제품 근접샷 (Extreme Close-Up)', desc: '상품의 미세한 마감과 핏의 질감을 정밀하게 보여주는 컷' }
+];
+
+const POSES = [
+  { id: 'dynamic-walking', label: '역동적인 워킹 (Dynamic Walking)', desc: '도시 속 혹은 런웨이를 거니는 스포티한 움직임' },
+  { id: 'confident-stand', label: '자신감 넘치는 정면 응시 (Confident Stand)', desc: '정면을 바라보며 시선을 사로잡는 클래식 상업화보 포즈' },
+  { id: 'cozy-relaxed', label: '자연스럽고 편안한 포즈 (Relaxed Sitting/Leaning)', desc: '난간이나 카페 의자에 기대어 편안한 일상과 제품의 어울림 표현' },
+  { id: 'high-fashion', label: '하이패션 에디토리얼 (Editorial Avant-Garde)', desc: '예술적이고 감각적인 앵글과 바디 실루엣을 강조한 예술 화보' }
+];
+
+const SHOWING_RANGES = [
+  { id: 'detail-close', label: '제품 중심 크롭 (Product Close-Up)', desc: '모델의 일부분과 매치된 상품을 프레임의 70% 이상 가득 채움' },
+  { id: 'bust-shot', label: '바스트 샷 (Bust Shot)', desc: '가슴 부분까지 크롭하여 모델 표정과 상반신 장식품 조화' },
+  { id: 'waist-up', label: '웨이스트 샷 (Waist-Up)', desc: '허리 윗부분을 조명하여 의류, 시계, 가방 피팅감 최적화' },
+  { id: 'full-body', label: '전신 샷 (Full Body)', desc: '머리끝부터 발끝까지 전체 스타일링과 배경 조화를 전부 담아냄' }
+];
+
+const BACKGROUNDS = [
+  { id: 'luxury-lounge', label: '5성급 호텔 라운지 (Luxury Hotel Lounge)', desc: '화려한 대리석, 은은한 간접 조명과 통유리 너머 도심 야경이 펼쳐지는 곳' },
+  { id: 'cyberpunk-neon', label: '네온 사이버펑크 야간 거리 (Cyberpunk Neon Street)', desc: '비 내린 도로 위 반사되는 네온사인과 홀로그램이 가득한 미래형 거리' },
+  { id: 'cozy-scandinavian', label: '스칸디나비아풍 카페 (Cozy Scandinavian Cafe)', desc: '따뜻한 우드 톤 가구, 풍성한 식물 오브제와 스며드는 자연 조명' },
+  { id: 'minimal-studio', label: '미니멀 모노 스튜디오 (Minimalist White/Grey Studio)', desc: '경계가 모호한 화이트 돔 스크린과 완벽히 통제된 무결점 패션 화보 전용 백그라운드' },
+  { id: 'nature-cliff', label: '북유럽 피오르드 절벽 해안 (Nordic Cliffside)', desc: '거친 해안 암벽, 파도와 안개가 자아내는 신비롭고 아웃도어 지향적인 대자연' }
+];
+
+const LIGHTINGS = [
+  { id: 'golden-hour', label: '찬란한 석양 빛 (Golden Hour Warmth)', desc: '오후 5시의 낮고 길게 드리우는 따뜻한 주황빛 감성 실루엣 조명' },
+  { id: 'rim-cinematic', label: '시네마틱 백라이트 & 림 라이트 (Cinematic Rim)', desc: '인물 윤곽선 뒤편에서 정교하게 감싸 흐르는 역광 조명 기법' },
+  { id: 'soft-diffused', label: '부드러운 디퓨즈 조명 (Soft Diffused Softbox)', desc: '그림자가 거의 지지 않는 은은하고 화사한 뷰티 광고 라이트' },
+  { id: 'high-contrast', label: '고대비 스포트라이트 (High Contrast Spotlight)', desc: '어두운 배경과 강렬한 주 조명을 대비시켜 입체감과 주도적인 무드를 극대화' }
+];
+
+function App() {
+  const [apiKey, setApiKey] = useState('');
+  const [apiReady, setApiReady] = useState(false);
+  
+  // Model & Product Selections
+  const [selectedProduct, setSelectedProduct] = useState(PRESET_PRODUCTS[0]);
+  const [selectedModel, setSelectedModel] = useState(PRESET_MODELS[0]);
+  
+  // Custom uploaded images (stored as base64 or object URLs)
+  const [customProductImage, setCustomProductImage] = useState(null);
+  const [customModelImage, setCustomModelImage] = useState(null);
+
+  // Layout Composer State
+  const [prodPos, setProdPos] = useState({ x: 50, y: 50, scale: 0.6, rotation: 0, opacity: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Camera, Pose, Background selections
+  const [cameraAngle, setCameraAngle] = useState(CAMERA_ANGLES[0].id);
+  const [pose, setPose] = useState(POSES[1].id);
+  const [showingRange, setShowingRange] = useState(SHOWING_RANGES[2].id);
+  const [background, setBackground] = useState(BACKGROUNDS[3].id);
+  const [lighting, setLighting] = useState(LIGHTINGS[2].id);
+  const [customPrompt, setCustomPrompt] = useState('');
+
+  // AI Generation States
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState('');
+  const [generatedImageUrl, setGeneratedImageUrl] = useState(null);
+  const [generationHistory, setGenerationHistory] = useState([]);
+  
+  // UI Tabs & Views
+  const [activeTab, setActiveTab] = useState('composer'); // 'composer', 'history', 'docs'
+  const [showGuide, setShowGuide] = useState(true);
+  
+  const composerContainerRef = useRef(null);
+
+  // Update base model or product selections when custom uploaded
+  const getProductImageSrc = () => {
+    return customProductImage || selectedProduct.url;
+  };
+
+  const getModelImageSrc = () => {
+    return customModelImage || selectedModel.url;
+  };
+
+  // Mouse / Touch handlers for dragging the product image over the model image
+  const handleDragStart = (e) => {
+    setIsDragging(true);
+    const clientX = e.clientX || e.touches[0].clientX;
+    const clientY = e.clientY || e.touches[0].clientY;
+    setDragStart({
+      x: clientX - prodPos.x,
+      y: clientY - prodPos.y
+    });
+  };
+
+  const handleDragMove = (e) => {
+    if (!isDragging) return;
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    if (!clientX || !clientY) return;
+
+    if (composerContainerRef.current) {
+      const rect = composerContainerRef.current.getBoundingClientRect();
+      let newX = clientX - dragStart.x;
+      let newY = clientY - dragStart.y;
+      
+      // Restrict positioning within bounding area roughly
+      newX = Math.max(-50, Math.min(rect.width + 50, newX));
+      newY = Math.max(-50, Math.min(rect.height + 50, newY));
+
+      setProdPos(prev => ({ ...prev, x: newX, y: newY }));
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  const adjustScale = (amount) => {
+    setProdPos(prev => ({
+      ...prev,
+      scale: Math.max(0.1, Math.min(2.0, parseFloat((prev.scale + amount).toFixed(2))))
+    }));
+  };
+
+  const adjustRotation = (amount) => {
+    setProdPos(prev => ({
+      ...prev,
+      rotation: (prev.rotation + amount) % 360
+    }));
+  };
+
+  const adjustOpacity = (value) => {
+    setProdPos(prev => ({
+      ...prev,
+      opacity: parseFloat(value)
+    }));
+  };
+
+  // Helper to trigger custom uploads
+  const handleProductUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        setCustomProductImage(uploadEvent.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleModelUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        setCustomModelImage(uploadEvent.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Function to capture the combined element and convert it to a clean base64 image (excluding controls)
+  const generateCompositeBase64 = async () => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const modelImg = new Image();
+      const prodImg = new Image();
+      
+      modelImg.crossOrigin = "anonymous";
+      prodImg.crossOrigin = "anonymous";
+      
+      modelImg.onload = () => {
+        // Use model image natural dimensions for base
+        canvas.width = modelImg.naturalWidth || 800;
+        canvas.height = modelImg.naturalHeight || 1000;
+        
+        // 1. Draw Model (Background)
+        ctx.drawImage(modelImg, 0, 0, canvas.width, canvas.height);
+        
+        // 2. Load Product & Draw it with current scale/rotation/pos
+        prodImg.onload = () => {
+          if (composerContainerRef.current) {
+            const rect = composerContainerRef.current.getBoundingClientRect();
+            
+            // Convert relative UI positions back to canvas coordinates
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const targetX = prodPos.x * scaleX;
+            const targetY = prodPos.y * scaleY;
+            
+            const targetWidth = (rect.width * prodPos.scale) * scaleX;
+            const targetHeight = (prodImg.naturalHeight * (targetWidth / prodImg.naturalWidth));
+            
+            ctx.save();
+            ctx.globalAlpha = prodPos.opacity;
+            
+            // Translate to center of product to rotate
+            ctx.translate(targetX, targetY);
+            ctx.rotate((prodPos.rotation * Math.PI) / 180);
+            
+            // Draw centered
+            ctx.drawImage(prodImg, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+            ctx.restore();
+          }
+          
+          // Export final composite base64 without header
+          const dataURL = canvas.toDataURL('image/png');
+          const base64Data = dataURL.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+          resolve(base64Data);
+        };
+        
+        prodImg.onerror = () => {
+          // If Unsplash block, we fall back to a styled rect on canvas to avoid breaking
+          ctx.save();
+          ctx.fillStyle = "rgba(239, 68, 68, 0.8)";
+          ctx.fillRect(canvas.width/3, canvas.height/3, canvas.width/3, canvas.height/3);
+          ctx.restore();
+          const base64Data = canvas.toDataURL('image/png').replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+          resolve(base64Data);
+        };
+        
+        prodImg.src = getProductImageSrc();
+      };
+      
+      modelImg.onerror = () => {
+        // Fallback if model image fails
+        canvas.width = 600;
+        canvas.height = 800;
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(0,0,600,800);
+        const base64Data = canvas.toDataURL('image/png').replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+        resolve(base64Data);
+      };
+      
+      modelImg.src = getModelImageSrc();
+    });
+  };
+
+  const startAIPhotoshoot = async () => {
+    setIsGenerating(true);
+    setGenerationStep('가상 배치도 합성 가이드 제작 중...');
+    
+    try {
+      // 1. Create guide image from visual workspace positioning
+      const compositeBase64 = await generateCompositeBase64();
+      
+      setGenerationStep('촬영 파라미터 프롬프트 조립 중...');
+      
+      // 2. Build descriptive parameters
+      const selectedAngleObj = CAMERA_ANGLES.find(a => a.id === cameraAngle);
+      const selectedPoseObj = POSES.find(p => p.id === pose);
+      const selectedRangeObj = SHOWING_RANGES.find(r => r.id === showingRange);
+      const selectedBgObj = BACKGROUNDS.find(b => b.id === background);
+      const selectedLightingObj = LIGHTINGS.find(l => l.id === lighting);
+      
+      // Smart ad-campaign prompt generator
+      const finalPrompt = `Create a high-end commercial advertising photoshoot based on the layout reference image provided.
+The product shown positioned on the model must be seamlessly and flawlessly integrated into the scene.
+Adapt the product to match the lighting, realistic soft cast-shadows, matching skin/fabric folds, and camera perspective of the model's pose.
+
+Shoot Specifications:
+- Product Details: ${customPrompt || 'Premium commercial fashion product'}
+- Camera Angle: ${selectedAngleObj.label}. ${selectedAngleObj.desc}
+- Model Pose: ${selectedPoseObj.label}. ${selectedPoseObj.desc}
+- Show Range/Framing: ${selectedRangeObj.label}. ${selectedRangeObj.desc}
+- Background Location: ${selectedBgObj.label}. ${selectedBgObj.desc}
+- Lighting Style: ${selectedLightingObj.label}. ${selectedLightingObj.desc}
+
+Technical Style: Professional high-fashion advertising campaign grade, realistic textures, detailed leather/metals/fabrics, elegant rim highlights, 8k resolution, cinematic atmosphere, crisp focus on the product, natural fitment. Avoid extra duplicate floating products. Only generate one stunning final image.`;
+
+      setGenerationStep('Gemini 3.1 Flash Image 연결 및 촬영 렌더링 중 (약 10-15초)...');
+      
+      // Prepare payload for Gemini 3.1 Flash Image Model
+      const payload = {
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: finalPrompt },
+            {
+              inlineData: {
+                mimeType: "image/png",
+                data: compositeBase64
+              }
+            }
+          ]
+        }],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+          imageConfig: {
+            aspectRatio: "3:4"
+          }
+        }
+      };
+
+      // Handle custom or default API key safely
+      const finalApiKey = apiKey || ""; // Automatically falls back to backend environment key in Canvas if empty
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${finalApiKey}`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API 응답 오류 (${response.status}): ${errText}`);
+      }
+
+      const result = await response.json();
+      const imagePart = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      
+      if (!imagePart || !imagePart.inlineData?.data) {
+        throw new Error("결과 이미지 데이터를 반환받지 못했습니다. 요청 인자를 확인하세요.");
+      }
+
+      const renderedUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+      setGeneratedImageUrl(renderedUrl);
+      
+      // Add to session photoshoot history
+      const newHistoryItem = {
+        id: 'photo-' + Date.now(),
+        product: selectedProduct.name,
+        model: selectedModel.name,
+        timestamp: new Date().toLocaleTimeString(),
+        parameters: {
+          angle: selectedAngleObj.label,
+          pose: selectedPoseObj.label,
+          background: selectedBgObj.label,
+          lighting: selectedLightingObj.label
+        },
+        url: renderedUrl
+      };
+      setGenerationHistory(prev => [newHistoryItem, ...prev]);
+      setGenerationStep('완성되었습니다!');
+      
+    } catch (error) {
+      console.error(error);
+      alert(`AI 화보 촬영 중 요류 발생: ${error.message}\nAPI 키가 정확하게 등록되어 있고 유효한지 확인해주세요.`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const applyPresetMatch = (modelId, productId) => {
+    const matchedModel = PRESET_MODELS.find(m => m.id === modelId);
+    const matchedProduct = PRESET_PRODUCTS.find(p => p.id === productId);
+    
+    if (matchedModel) {
+      setSelectedModel(matchedModel);
+      setCustomModelImage(null);
+    }
+    if (matchedProduct) {
+      setSelectedProduct(matchedProduct);
+      setCustomProductImage(null);
+    }
+
+    // Set smart positions depending on selected matching preset
+    if (productId === 'prod-sneakers') {
+      setProdPos({ x: 195, y: 390, scale: 0.5, rotation: 12, opacity: 1 });
+      setCameraAngle('low-angle');
+      setPose('dynamic-walking');
+      setShowingRange('full-body');
+      setBackground('cyberpunk-neon');
+      setLighting('rim-cinematic');
+      setCustomPrompt('트렌디한 네온 컬러의 러닝화를 신고 젖은 아스팔트 위를 달리는 모델의 다리 크로즈업 샷');
+    } else if (productId === 'prod-watch') {
+      setProdPos({ x: 180, y: 230, scale: 0.35, rotation: -15, opacity: 1 });
+      setCameraAngle('macro-close');
+      setPose('cozy-relaxed');
+      setShowingRange('detail-close');
+      setBackground('cozy-scandinavian');
+      setLighting('golden-hour');
+      setCustomPrompt('따뜻한 석양빛이 비치는 감각적인 북유럽 감성 카페를 배경으로 손목에 클래식한 메탈 가죽 스마트워치를 착용한 감성 사진');
+    } else if (productId === 'prod-glasses') {
+      setProdPos({ x: 200, y: 130, scale: 0.38, rotation: 5, opacity: 1 });
+      setCameraAngle('eye-level');
+      setPose('confident-stand');
+      setShowingRange('bust-shot');
+      setBackground('minimal-studio');
+      setLighting('soft-diffused');
+      setCustomPrompt('우아한 스튜디오 조명 아래 클래식 골드 하프림 선글라스를 자연스럽게 착용한 여성 모델의 뷰티 광고 화보');
+    } else if (productId === 'prod-bag') {
+      setProdPos({ x: 170, y: 340, scale: 0.6, rotation: -8, opacity: 1 });
+      setCameraAngle('high-angle');
+      setPose('high-fashion');
+      setShowingRange('waist-up');
+      setBackground('luxury-lounge');
+      setLighting('high-contrast');
+      setCustomPrompt('고급 호텔 라운지의 세련된 대리석 배경과 대조되는 레더 토트백을 어깨에 메고 있는 패션 모델 화보');
+    }
+  };
+
+  // Run initial matching preset
+  useEffect(() => {
+    applyPresetMatch('model-male-sporty', 'prod-sneakers');
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* --- Top Navigation Header --- */}
+      <header className="bg-[#0f172a] border-b border-slate-800 px-6 py-4 sticky top-0 z-50 flex flex-wrap justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-2 rounded-lg text-white">
+            <i className="fa-solid fa-camera-retro text-xl"></i>
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+              AdLens Studio <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full font-medium ml-2">v3.1 Live AI</span>
+            </h1>
+            <p className="text-xs text-slate-400">모델 피팅 조절 기반 맞춤형 가상 상업 화보 촬영 스튜디오</p>
+          </div>
+        </div>
+
+        {/* Workspace Quick Options */}
+        <div className="flex items-center space-x-4 mt-3 sm:mt-0">
+          <div className="flex space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <button 
+              onClick={() => setActiveTab('composer')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'composer' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+              <i className="fa-solid fa-wand-magic-sparkles mr-1.5"></i> 화보 촬영실
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all relative ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+              <i className="fa-solid fa-images mr-1.5"></i> 갤러리 
+              {generationHistory.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  {generationHistory.length}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => setActiveTab('docs')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'docs' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+              <i className="fa-solid fa-circle-question mr-1.5"></i> 가이드
+            </button>
+          </div>
+
+          {/* API Key Box */}
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <input 
+                type="password" 
+                placeholder="Gemini API Key (선택)" 
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-1.5 w-44 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <i className="fa-solid fa-key absolute left-2.5 top-2.5 text-slate-500 text-[10px]"></i>
+            </div>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="자동 매칭 활성화"></span>
+          </div>
+        </div>
+      </header>
+
+      {/* --- Main Studio Workspace Grid --- */}
+      {activeTab === 'composer' && (
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+          
+          {/* 1. Left Selection Sidebar (4 cols) */}
+          <aside className="lg:col-span-4 border-r border-slate-800 bg-[#0c1220] overflow-y-auto p-5 space-y-6">
+            
+            {/* Quick Match Presets */}
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-bold text-slate-300 flex items-center">
+                  <i className="fa-solid fa-layer-group text-indigo-500 mr-2"></i>원클릭 매칭 템플릿
+                </span>
+                <span className="text-[10px] text-slate-500">원클릭 최적화</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                  onClick={() => applyPresetMatch('model-male-sporty', 'prod-sneakers')}
+                  className="bg-slate-800/80 hover:bg-slate-800 hover:border-slate-700 transition p-2 rounded-lg text-left border border-slate-800 text-xs">
+                  <div className="font-semibold text-slate-200">🏃 남성 러닝화 룩</div>
+                  <div className="text-[10px] text-slate-400 mt-1">스포티 & 네온스트릿</div>
+                </button>
+                <button 
+                  onClick={() => applyPresetMatch('model-body-hands', 'prod-watch')}
+                  className="bg-slate-800/80 hover:bg-slate-800 hover:border-slate-700 transition p-2 rounded-lg text-left border border-slate-800 text-xs">
+                  <div className="font-semibold text-slate-200">⌚ 손목 시계 룩</div>
+                  <div className="text-[10px] text-slate-400 mt-1">코지 카페 & 클로즈업</div>
+                </button>
+                <button 
+                  onClick={() => applyPresetMatch('model-female-fashion', 'prod-glasses')}
+                  className="bg-slate-800/80 hover:bg-slate-800 hover:border-slate-700 transition p-2 rounded-lg text-left border border-slate-800 text-xs">
+                  <div className="font-semibold text-slate-200">🕶️ 패션 선글라스 룩</div>
+                  <div className="text-[10px] text-slate-400 mt-1">미니멀 스튜디오</div>
+                </button>
+                <button 
+                  onClick={() => applyPresetMatch('model-fullbody-studio', 'prod-bag')}
+                  className="bg-slate-800/80 hover:bg-slate-800 hover:border-slate-700 transition p-2 rounded-lg text-left border border-slate-800 text-xs">
+                  <div className="font-semibold text-slate-200">👜 수트 가방 코디</div>
+                  <div className="text-[10px] text-slate-400 mt-1">호텔 라운지 & 고대비</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Step 1: Model Setup */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center">
+                  <span className="bg-indigo-600/20 text-indigo-400 px-2 py-0.5 rounded mr-2 text-xs">1</span> 
+                  모델(Model) 선택 & 업로드
+                </h3>
+                <label className="text-xs text-indigo-400 font-medium cursor-pointer hover:text-indigo-300">
+                  <i className="fa-solid fa-cloud-arrow-up mr-1"></i>업로드
+                  <input type="file" accept="image/*" onChange={handleModelUpload} className="hidden" />
+                </label>
+              </div>
+              
+              {customModelImage ? (
+                <div className="relative bg-slate-900 p-3 rounded-lg border border-indigo-500/50 flex justify-between items-center">
+                  <div className="flex items-center space-x-3">
+                    <img src={customModelImage} className="w-10 h-10 object-cover rounded" />
+                    <div>
+                      <div className="text-xs font-bold text-slate-200">업로드된 사용자 모델</div>
+                      <div className="text-[10px] text-emerald-400">사용 중</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setCustomModelImage(null)} className="text-slate-500 hover:text-red-400 text-xs px-2 py-1">
+                    취소
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {PRESET_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setSelectedModel(m)}
+                      className={`relative group overflow-hidden rounded-xl border text-left transition-all ${selectedModel.id === m.id ? 'border-indigo-500 ring-2 ring-indigo-500/30' : 'border-slate-800 hover:border-slate-700'}`}>
+                      <img src={m.url} className="w-full h-24 object-cover brightness-75 group-hover:brightness-90 transition" />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-2">
+                        <p className="text-[11px] font-bold truncate text-white">{m.name}</p>
+                        <p className="text-[9px] text-slate-400">{m.category}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Product Setup */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center">
+                  <span className="bg-indigo-600/20 text-indigo-400 px-2 py-0.5 rounded mr-2 text-xs">2</span> 
+                  상품(Product) 이미지 설정
+                </h3>
+                <label className="text-xs text-indigo-400 font-medium cursor-pointer hover:text-indigo-300">
+                  <i className="fa-solid fa-cloud-arrow-up mr-1"></i>업로드
+                  <input type="file" accept="image/*" onChange={handleProductUpload} className="hidden" />
+                </label>
+              </div>
+
+              {customProductImage ? (
+                <div className="relative bg-slate-900 p-3 rounded-lg border border-indigo-500/50 flex justify-between items-center">
+                  <div className="flex items-center space-x-3">
+                    <img src={customProductImage} className="w-10 h-10 object-cover rounded" />
+                    <div>
+                      <div className="text-xs font-bold text-slate-200">업로드된 사용자 상품</div>
+                      <div className="text-[10px] text-emerald-400">사용 중</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setCustomProductImage(null)} className="text-slate-500 hover:text-red-400 text-xs px-2 py-1">
+                    취소
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {PRESET_PRODUCTS.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedProduct(p)}
+                      className={`relative group overflow-hidden rounded-xl border text-left transition-all ${selectedProduct.id === p.id ? 'border-indigo-500 ring-2 ring-indigo-500/30' : 'border-slate-800 hover:border-slate-700'}`}>
+                      <img src={p.url} className="w-full h-24 object-cover brightness-75 group-hover:brightness-90 transition" />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-2">
+                        <p className="text-[11px] font-bold truncate text-white">{p.name}</p>
+                        <p className="text-[9px] text-slate-400">{p.category}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Composer Fit Controls */}
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-4">
+              <span className="text-xs font-bold text-slate-300 flex items-center">
+                <i className="fa-solid fa-sliders text-indigo-500 mr-2"></i>화보 피팅 조절도구 (Composer)
+              </span>
+              
+              <div className="space-y-3">
+                {/* Scale Slider */}
+                <div>
+                  <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>크기 조절 (Scale)</span>
+                    <span className="text-indigo-400 font-bold">{Math.round(prodPos.scale * 100)}%</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => adjustScale(-0.05)} className="bg-slate-800 text-slate-300 w-6 h-6 rounded flex items-center justify-center hover:bg-slate-700">-</button>
+                    <input 
+                      type="range" min="0.1" max="1.5" step="0.01" 
+                      value={prodPos.scale} 
+                      onChange={(e) => setProdPos(prev => ({ ...prev, scale: parseFloat(e.target.value) }))}
+                      className="flex-1 accent-indigo-500" 
+                    />
+                    <button onClick={() => adjustScale(0.05)} className="bg-slate-800 text-slate-300 w-6 h-6 rounded flex items-center justify-center hover:bg-slate-700">+</button>
+                  </div>
+                </div>
+
+                {/* Rotation Slider */}
+                <div>
+                  <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>회전 조절 (Rotation)</span>
+                    <span className="text-indigo-400 font-bold">{prodPos.rotation}°</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => adjustRotation(-15)} className="bg-slate-800 text-slate-300 w-6 h-6 rounded flex items-center justify-center hover:bg-slate-700"><i className="fa-solid fa-rotate-left text-[10px]"></i></button>
+                    <input 
+                      type="range" min="0" max="360" step="1" 
+                      value={prodPos.rotation} 
+                      onChange={(e) => setProdPos(prev => ({ ...prev, rotation: parseInt(e.target.value) }))}
+                      className="flex-1 accent-indigo-500" 
+                    />
+                    <button onClick={() => adjustRotation(15)} className="bg-slate-800 text-slate-300 w-6 h-6 rounded flex items-center justify-center hover:bg-slate-700"><i className="fa-solid fa-rotate-right text-[10px]"></i></button>
+                  </div>
+                </div>
+
+                {/* Opacity Slider */}
+                <div>
+                  <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>불투명도 (정교한 가이드 매칭용)</span>
+                    <span className="text-indigo-400 font-bold">{Math.round(prodPos.opacity * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" min="0.1" max="1" step="0.05" 
+                    value={prodPos.opacity} 
+                    onChange={(e) => adjustOpacity(e.target.value)}
+                    className="w-full accent-indigo-500" 
+                  />
+                </div>
+              </div>
+            </div>
+
+          </aside>
+
+          {/* 2. Middle Composer & Live Preview (5 cols) */}
+          <main className="lg:col-span-5 bg-slate-950 p-6 flex flex-col justify-between border-r border-slate-800 overflow-y-auto">
+            
+            {/* Guide Info Banner */}
+            {showGuide && (
+              <div className="bg-slate-900 border border-indigo-500/20 rounded-xl p-3 mb-4 flex justify-between items-start text-xs text-slate-300">
+                <div className="flex space-x-3">
+                  <i className="fa-solid fa-info-circle text-indigo-400 text-base mt-0.5"></i>
+                  <div>
+                    <span className="font-bold text-white block">💡 가상 피팅 및 컴포저 가이드</span>
+                    아래 모델 화면의 <strong className="text-indigo-400">상품 영역을 직접 클릭해 드래그</strong>하여 모델의 관절/머리/발 부위에 맞추어 상품 핏(Fit)의 위치와 크기, 각도를 설정해보세요! 그 후 촬영을 누르면 인공지능이 자연스럽게 결합합니다.
+                  </div>
+                </div>
+                <button onClick={() => setShowGuide(false)} className="text-slate-500 hover:text-white ml-2 text-sm"><i className="fa-solid fa-xmark"></i></button>
+              </div>
+            )}
+
+            {/* Visual Composer Frame */}
+            <div className="flex-1 flex flex-col items-center justify-center py-2">
+              <span className="text-xs text-slate-400 mb-2 font-bold flex items-center">
+                <i className="fa-solid fa-crop-simple mr-1.5 text-slate-500"></i> 원본 피팅 가이드 컴포저 (Composer Canvas)
+              </span>
+              
+              <div 
+                ref={composerContainerRef}
+                onMouseMove={handleDragMove}
+                onMouseUp={handleDragEnd}
+                onMouseLeave={handleDragEnd}
+                onTouchMove={handleDragMove}
+                onTouchEnd={handleDragEnd}
+                className="relative w-full max-w-[340px] aspect-[3/4] bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl select-none cursor-crosshair">
+                
+                {/* Background Model Layer */}
+                <img 
+                  src={getModelImageSrc()} 
+                  alt="Model Draft" 
+                  className="w-full h-full object-cover pointer-events-none"
+                />
+
+                {/* Draggable Overlay Product Layer */}
+                <div
+                  onMouseDown={handleDragStart}
+                  onTouchStart={handleDragStart}
+                  style={{
+                    position: 'absolute',
+                    left: `${prodPos.x}px`,
+                    top: `${prodPos.y}px`,
+                    transform: `translate(-50%, -50%) rotate(${prodPos.rotation}deg) scale(${prodPos.scale})`,
+                    opacity: prodPos.opacity,
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                  }}
+                  className={`group select-none max-w-[200px] ${isDragging ? 'ring-2 ring-indigo-400' : 'hover:ring-1 hover:ring-slate-400'} rounded p-1`}>
+                  
+                  <img 
+                    src={getProductImageSrc()} 
+                    alt="Product Sticker" 
+                    className="w-full pointer-events-none drop-shadow-lg"
+                  />
+                  
+                  {/* Visual Drag Helper Outline */}
+                  <div className="absolute inset-0 border border-indigo-500/0 group-hover:border-indigo-400/60 rounded flex items-center justify-center">
+                    <span className="hidden group-hover:block bg-indigo-600 text-white text-[9px] px-1 rounded shadow">드래그 가능</span>
+                  </div>
+                </div>
+
+                {/* Compass Marker */}
+                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md text-[10px] text-slate-300 px-2 py-1 rounded-md border border-slate-700/50">
+                  <i className="fa-solid fa-arrows-up-down-left-right text-indigo-400 mr-1"></i> X:{Math.round(prodPos.x)} Y:{Math.round(prodPos.y)}
+                </div>
+              </div>
+
+              {/* Reset Control */}
+              <button 
+                onClick={() => setProdPos({ x: 170, y: 220, scale: 0.5, rotation: 0, opacity: 1 })}
+                className="mt-3 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1 text-xs rounded-full transition">
+                <i className="fa-solid fa-arrows-rotate mr-1"></i> 위치 초기화
+              </button>
+            </div>
+
+            {/* Custom Ad Text Overlay prompt */}
+            <div className="mt-4 pt-3 border-t border-slate-800 space-y-2">
+              <label className="text-xs font-bold text-slate-300 flex items-center">
+                <i className="fa-solid fa-quote-left text-indigo-500 mr-2"></i> 상품 특징 상세 묘사 (선택)
+              </label>
+              <textarea 
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="예: 현대적인 레드 스포티 스니커즈, 가볍고 유려한 외관, 상표가 가려진 무로고 스타일..."
+                rows="2"
+                className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+          </main>
+
+          {/* 3. Right Advanced Shoot Parameters & Execute (3 cols) */}
+          <aside className="lg:col-span-3 bg-[#0c1220] p-5 flex flex-col justify-between overflow-y-auto">
+            
+            <div className="space-y-6">
+              <div className="border-b border-slate-800 pb-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
+                  <i className="fa-solid fa-video text-indigo-500 mr-2"></i>카메라 촬영 및 연출 설정
+                </h4>
+              </div>
+
+              {/* Angle selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">촬영 앵글 (Camera Angle)</label>
+                <select 
+                  value={cameraAngle}
+                  onChange={(e) => setCameraAngle(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {CAMERA_ANGLES.map(a => (
+                    <option key={a.id} value={a.id}>{a.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Poses selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">모델 포즈 (Pose & Vibe)</label>
+                <select 
+                  value={pose}
+                  onChange={(e) => setPose(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {POSES.map(p => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Showing range */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">보여지는 범위 (Framing)</label>
+                <select 
+                  value={showingRange}
+                  onChange={(e) => setShowingRange(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {SHOWING_RANGES.map(r => (
+                    <option key={r.id} value={r.id}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Background selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">촬영 배경 (Background)</label>
+                <select 
+                  value={background}
+                  onChange={(e) => setBackground(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {BACKGROUNDS.map(bg => (
+                    <option key={bg.id} value={bg.id}>{bg.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lighting selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">조명 연출 (Commercial Lighting)</label>
+                <select 
+                  value={lighting}
+                  onChange={(e) => setLighting(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {LIGHTINGS.map(l => (
+                    <option key={l.id} value={l.id}>{l.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Action Shooting Trigger */}
+            <div className="mt-8 space-y-3">
+              {isGenerating ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-xs font-semibold text-indigo-400">AI 스튜디오 촬영 중...</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">{generationStep}</p>
+                </div>
+              ) : (
+                <button
+                  onClick={startAIPhotoshoot}
+                  className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/20 text-xs transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center space-x-2">
+                  <i className="fa-solid fa-camera text-base"></i>
+                  <span>AI 광고 화보 촬영 시작</span>
+                </button>
+              )}
+              
+              <div className="text-center">
+                <span className="text-[10px] text-slate-500">
+                  Gemini 3.1 Flash Image의 피팅 조화 기술이 결합됩니다
+                </span>
+              </div>
+            </div>
+
+          </aside>
+
+        </div>
+      )}
+
+      {/* --- Gallery & History View --- */}
+      {activeTab === 'history' && (
+        <div className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6 overflow-y-auto">
+          <div className="border-b border-slate-800 pb-4 flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold">생성된 광고 화보 갤러리</h2>
+              <p className="text-slate-400 text-sm mt-1">이번 세션에서 촬영된 완벽한 핏의 AI 광고 화보 히스토리입니다.</p>
+            </div>
+            {generationHistory.length > 0 && (
+              <button 
+                onClick={() => { if(confirm('모든 히스토리를 삭제하시겠습니까?')) setGenerationHistory([]) }}
+                className="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-400 border border-red-900/30 px-3 py-1.5 rounded-lg transition">
+                전체 삭제
+              </button>
+            )}
+          </div>
+
+          {generationHistory.length === 0 ? (
+            <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-16 text-center max-w-xl mx-auto mt-12 space-y-4">
+              <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-500">
+                <i className="fa-solid fa-images text-2xl"></i>
+              </div>
+              <h3 className="text-lg font-bold text-slate-300">촬영된 광고 화보가 아직 없습니다</h3>
+              <p className="text-xs text-slate-500">첫 화면의 촬영 컴포저에서 피팅 위치를 잡고 [AI 광고 화보 촬영 시작]을 클릭하세요!</p>
+              <button 
+                onClick={() => setActiveTab('composer')}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-semibold transition">
+                화보 촬영하러 가기
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {generationHistory.map((item) => (
+                <div key={item.id} className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="relative aspect-[3/4] bg-slate-950">
+                      <img src={item.url} alt="Generated Shoot" className="w-full h-full object-cover" />
+                      <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-2 py-1 rounded-md text-[10px] text-slate-300">
+                        {item.timestamp}
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-200">
+                          {item.product} × {item.model}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-400">
+                        <div className="bg-slate-950 p-1.5 rounded">📐 {item.parameters.angle}</div>
+                        <div className="bg-slate-950 p-1.5 rounded">🧍 {item.parameters.pose}</div>
+                        <div className="bg-slate-950 p-1.5 rounded-b col-span-2">📍 {item.parameters.background}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 border-t border-slate-800/60 bg-slate-950 flex space-x-2">
+                    <a 
+                      href={item.url} 
+                      download={`AI-Photoshoot-${item.id}.png`}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs text-center font-bold py-2 rounded-lg transition flex items-center justify-center space-x-1.5">
+                      <i className="fa-solid fa-download"></i>
+                      <span>다운로드</span>
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- Guide & Documentation Tab --- */}
+      {activeTab === 'docs' && (
+        <div className="flex-1 p-6 max-w-4xl mx-auto w-full space-y-8 overflow-y-auto">
+          <div className="border-b border-slate-800 pb-4">
+            <h2 className="text-2xl font-bold">AdLens Studio 이용 가이드</h2>
+            <p className="text-slate-400 text-sm mt-1">가상 피팅 기반 AI 상업 광고 촬영 화보 제작의 핵심 원리 및 설명</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-3">
+              <h3 className="font-bold text-indigo-400 text-sm flex items-center">
+                <i className="fa-solid fa-wand-magic-sparkles mr-2"></i> 어떻게 동작하나요?
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                사용자가 캔버스 위에서 모델 몸의 적절한 부위(예: 발목 위의 신발, 손목 위의 시계)에 맞추어 상품을 적절한 각도로 올려두면, 그 가이드라인 레이아웃 정보를 <strong>Gemini 3.1 Flash Image</strong> 모델로 전송합니다. 
+                AI는 이 합성 레이아웃 이미지를 기하학적 형태 가이드라인으로 인식한 후, 사용자가 설정한 촬영 세팅 조건(조명, 배경, 아웃포커싱, 카메라 앵글)을 반영하여 두 물체가 완전히 하나의 생생한 화보로 합쳐지도록 새롭게 그리게 됩니다.
+              </p>
+            </div>
+
+            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-3">
+              <h3 className="font-bold text-emerald-400 text-sm flex items-center">
+                <i className="fa-solid fa-lightbulb mr-2"></i> 더 멋진 사진을 만드는 꿀팁
+              </h3>
+              <ul className="text-xs text-slate-300 space-y-2 list-disc list-inside">
+                <li><strong>배치 핏 맞추기</strong>: 상품 크기를 너무 크지도 작지도 않게 적절하게 맞추고, 각도를 관절 방향에 부합하게 살짝 꺾어주면 극대화된 시너지가 납니다.</li>
+                <li><strong>조명 세팅</strong>: 사이버펑크나 야외 자연 환경을 선택했을 때는 &apos;네온 글로우&apos; 나 &apos;따뜻한 골든아워&apos; 조명을 맞춰보세요. 반사광 표현이 대폭 상향됩니다.</li>
+                <li><strong>맞춤형 묘사 추가</strong>: 하단에 제품의 디테일(예: &apos;광택이 도는 검정 스마트워치&apos;)을 적어주면 AI가 텍스처를 기가 막히게 세공합니다.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Model Tech Spec Summary */}
+          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h3 className="font-bold text-slate-200 text-sm">핵심 적용 기술 스펙트럼</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+              <div className="bg-slate-950 p-4 rounded-xl">
+                <i className="fa-solid fa-bezier-curve text-indigo-400 text-xl mb-2"></i>
+                <div className="text-xs font-bold text-slate-200">기하학적 핏팅 매칭</div>
+                <div className="text-[10px] text-slate-500 mt-1">인체 구도 인식</div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl">
+                <i className="fa-solid fa-lightbulb text-amber-400 text-xl mb-2"></i>
+                <div className="text-xs font-bold text-slate-200">인텔리전트 그림자</div>
+                <div className="text-[10px] text-slate-500 mt-1">빛과 조화로운 동기화</div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl">
+                <i className="fa-solid fa-glasses text-emerald-400 text-xl mb-2"></i>
+                <div className="text-xs font-bold text-slate-200">8K 디테일 업스케일</div>
+                <div className="text-[10px] text-slate-500 mt-1">상품 무결점 질감 처리</div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl">
+                <i className="fa-solid fa-camera text-blue-400 text-xl mb-2"></i>
+                <div className="text-xs font-bold text-slate-200">스튜디오 아웃포커스</div>
+                <div className="text-[10px] text-slate-500 mt-1">상업용 피사계 심도 제어</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Generation Modal Result Overlap Screen --- */}
+      {generatedImageUrl && activeTab === 'composer' && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col justify-center items-center p-4 overflow-y-auto">
+          <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+            
+            {/* Modal Header */}
+            <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-xs font-bold">완성</span>
+                <h3 className="font-bold text-slate-200">AI 가상 광고 화보 촬영 결과</h3>
+              </div>
+              <button 
+                onClick={() => setGeneratedImageUrl(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            {/* Shoot Split Screen (Comparison Slider Style) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+              
+              {/* Draft Fitting Input Guide */}
+              <div className="space-y-2">
+                <span className="text-xs text-slate-400 font-bold block text-center">
+                  [이전] 원본 피팅 가이드 레이아웃
+                </span>
+                <div className="aspect-[3/4] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 relative">
+                  <img src={getModelImageSrc()} className="w-full h-full object-cover" />
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      left: `${(prodPos.x / (composerContainerRef.current?.getBoundingClientRect().width || 1)) * 100}%`,
+                      top: `${(prodPos.y / (composerContainerRef.current?.getBoundingClientRect().height || 1)) * 100}%`,
+                      transform: `translate(-50%, -50%) rotate(${prodPos.rotation}deg) scale(${prodPos.scale * 0.95})`,
+                      opacity: 0.8
+                    }}
+                    className="absolute w-1/2">
+                    <img src={getProductImageSrc()} className="w-full drop-shadow-xl" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Generated AI Photoshoot */}
+              <div className="space-y-2">
+                <span className="text-xs text-indigo-400 font-bold block text-center">
+                  ✨ [AI 촬영완료] 핏 매칭 광고 화보
+                </span>
+                <div className="aspect-[3/4] bg-slate-950 rounded-xl overflow-hidden border border-indigo-500/30 shadow-lg shadow-indigo-600/10">
+                  <img src={generatedImageUrl} className="w-full h-full object-cover" />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center flex-wrap gap-2">
+              <p className="text-[11px] text-slate-500 max-w-md">
+                인공지능이 모델의 체형 굴곡을 분석하여 조명 매칭과 미려한 셰이딩 처리를 실시간으로 일체화시켰습니다.
+              </p>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={() => setGeneratedImageUrl(null)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-4 py-2.5 rounded-lg transition font-semibold">
+                  닫기 및 다시 맞추기
+                </button>
+                <a 
+                  href={generatedImageUrl} 
+                  download="AI_Premium_Photoshoot.png"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs px-5 py-2.5 rounded-lg transition font-bold shadow flex items-center space-x-1.5">
+                  <i className="fa-solid fa-download"></i>
+                  <span>초고화질 화보 다운로드</span>
+                </a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- Footer Status Bar --- */}
+      <footer className="bg-[#0b0f19] border-t border-slate-900 px-6 py-3 text-center text-xs text-slate-500 flex justify-between items-center">
+        <span>© 2026 AdLens AI Studio Inc. All rights reserved.</span>
+        <div className="flex items-center space-x-4">
+          <span className="flex items-center text-[11px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+            Gemini 3.1 Flash Image 연결됨
+          </span>
+          <span className="text-slate-600">|</span>
+          <a href="#" onClick={() => setActiveTab('docs')} className="hover:text-slate-300">이용 약관 및 개인정보 처리방침</a>
+        </div>
+      </footer>
+
+    </div>
+  );
+}
+
+// Render React App
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+root.render(<App />);
+</script>
+
+</body>
+</html>
